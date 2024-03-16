@@ -209,6 +209,7 @@ struct FOTAConfig_t
   bool         check_sig { false };
   bool         unsafe { false };
   bool         use_device_id { false };
+  char*        spiffs_partition_label { nullptr };
   CryptoAsset* root_ca { nullptr };
   CryptoAsset* pub_key { nullptr };
   size_t       signature_len {FW_SIGNATURE_LENGTH};
@@ -268,6 +269,9 @@ public:
 
   // use this to set "Authorization: Basic" or other specific headers to be sent with the queries
   void setExtraHTTPHeader( String name, String value ) { extraHTTPHeaders[name] = value; }
+
+  // use this to set the SPIFFs partition name, only required if there is more than one SPIFFs partition
+  void setSPIFFsPartitionLabel( char* name ){ _cfg.spiffs_partition_label = name; }
 
   // set the signature len
   void setSignatureLen( size_t len );
@@ -380,6 +384,7 @@ private:
   bool checkJSONManifest(JsonVariant JSONDocument);
   void debugSemVer( const char* label, semver_t* version );
   void getPartition( int update_partition );
+  void getPartition( int update_partition, const char* label );
 
   bool validate_sig( const esp_partition_t* partition, unsigned char *signature, uint32_t firmware_size );
 

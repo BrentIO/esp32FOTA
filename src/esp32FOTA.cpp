@@ -187,7 +187,7 @@ void esp32FOTA::setConfig( FOTAConfig_t cfg )
 void esp32FOTA::printConfig( FOTAConfig_t *cfg )
 {
   if( cfg == nullptr ) cfg = &_cfg;
-  log_d("Name: %s\nManifest URL:%s\nSemantic Version: %d.%d.%d\nCheck Sig: %s\nUnsafe: %s\nUse Device ID: %s\nRootCA: %s\nPubKey: %s\nSignatureLen: %d\n",
+  log_d("Name: %s\nManifest URL:%s\nSemantic Version: %d.%d.%d\nCheck Sig: %s\nUnsafe: %s\nUse Device ID: %s\nSPIFFs Partition Label: %s\nRootCA: %s\nPubKey: %s\nSignatureLen: %d\n",
     cfg->name ? cfg->name : "None",
     cfg->manifest_url ? cfg->manifest_url : "None",
     cfg->sem.ver()->major,
@@ -196,6 +196,7 @@ void esp32FOTA::printConfig( FOTAConfig_t *cfg )
     cfg->check_sig ?"true":"false",
     cfg->unsafe ?"true":"false",
     cfg->use_device_id ?"true":"false",
+    cfg->spiffs_partition_label ?cfg->spiffs_partition_label : "None",
     cfg->root_ca ?"true":"false",
     cfg->pub_key ?"true":"false",
     cfg->signature_len
@@ -550,7 +551,22 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
     // If using compression, the size is implicitely unknown
     size_t fwsize = mode_z ? UPDATE_SIZE_UNKNOWN : updateSize;       // fw_size is unknown if we have a compressed image
 
-    bool canBegin = F_canBegin();
+    bool canBegin = false;
+
+    //If type is spiffs and a specific partition label is specified
+    if(partition == U_SPIFFS && _cfg.spiffs_partition_label){
+        canBegin = Update.begin(fwsize, partition, -1, LOW, _cfg.spiffs_partition_label);
+
+        if(!canBegin){
+            log_e("Update cannot begin; Partition type (%i), label (%s), or size (%i) mismatch", partition, _cfg.spiffs_partition_label, fwsize);
+            F_abort();
+            if( onUpdateBeginFail ) onUpdateBeginFail( partition );
+            return false;
+        }
+
+    }else{
+        canBegin = F_canBegin();
+    }
 
     if( !canBegin ) {
         log_e("Not enough space to begin OTA, partition size mismatch?");
@@ -603,7 +619,12 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
 
         log_i("Checking partition %d to validate", partition);
 
-        getPartition( partition ); // updated partition => '_target_partition' pointer
+        if(partition == U_SPIFFS && _cfg.spiffs_partition_label){
+            getPartition( partition, _cfg.spiffs_partition_label );
+        }
+        else{
+            getPartition( partition ); // updated partition => '_target_partition' pointer
+        }
 
         #define CHECK_SIG_ERROR_PARTITION_NOT_FOUND -1
         #define CHECK_SIG_ERROR_VALIDATION_FAILED   -2
@@ -670,15 +691,20 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
 }
 
 
-void esp32FOTA::getPartition( int update_partition )
+void esp32FOTA::getPartition( int update_partition){
+    getPartition(update_partition, NULL);
+}
+
+
+void esp32FOTA::getPartition( int update_partition, const char* label)
 {
     _target_partition = nullptr;
     if( update_partition == U_FLASH ) {
         // select the last-updated OTA partition
         _target_partition = esp_ota_get_next_update_partition(NULL);
     } else if( update_partition == U_SPIFFS ) {
-        // iterate through partitions table to find the spiffs/littlefs partition
-        esp_partition_iterator_t iterator = esp_partition_find( ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL );
+        // iterate through partitions table to find the spiffs/littlefs partition with the given label (if any)
+        esp_partition_iterator_t iterator = esp_partition_find( ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, label );
         while( iterator != NULL ) {
             _target_partition = (esp_partition_t *)esp_partition_get( iterator );
             iterator = esp_partition_next( iterator );
