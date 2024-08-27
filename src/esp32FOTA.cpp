@@ -950,7 +950,7 @@ bool esp32FOTA::forceUpdate(bool validate )
 
 
 /**
- * This function return the new version of new firmware
+ * This function return the major version of new firmware
  */
 int esp32FOTA::getPayloadVersion()
 {
