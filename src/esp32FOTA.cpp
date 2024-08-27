@@ -861,7 +861,9 @@ bool esp32FOTA::execHTTPcheck()
     }
 
     // TODO: use payload.length() to speculate on JSONResult buffer size
-    #define JSON_FW_BUFF_SIZE 2048
+    #ifndef JSON_FW_BUFF_SIZE
+        #define JSON_FW_BUFF_SIZE 2048
+    #endif
     DynamicJsonDocument JSONResult( JSON_FW_BUFF_SIZE );
     DeserializationError err = deserializeJson( JSONResult, _http.getStream() );
 
