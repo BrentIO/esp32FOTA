@@ -959,6 +959,9 @@ int esp32FOTA::getPayloadVersion()
 }
 
 
+/**
+ * This function return the version of new firmware as char*
+ */
 void esp32FOTA::getPayloadVersion(char * version_string)
 {
     semver_render( _payload_sem.ver(), version_string );
