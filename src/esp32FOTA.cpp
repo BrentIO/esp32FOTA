@@ -880,6 +880,7 @@ bool esp32FOTA::execHTTPcheck()
         for (JsonVariant JSONDocument : arr) {
             if(checkJSONManifest(JSONDocument)) {
                 // TODO: filter "highest vs next" version number for JSON with only one firmware type but several version numbers
+                if( onUpdateAvailable ) onUpdateAvailable( JSONDocument );
                 return true;
             }
         }

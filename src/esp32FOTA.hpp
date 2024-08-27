@@ -300,6 +300,10 @@ public:
   typedef std::function<void(int,bool)> UpdateFinished_cb; // int partition (U_FLASH or U_SPIFFS), bool restart_after
   void setUpdateFinishedCb(UpdateFinished_cb fn) { onUpdateFinished = fn; } // callback setter
 
+  // update available
+  typedef std::function<void(const JsonVariant&)> UpdateAvailable_cb; // JsonVariant JSON document with the targeted update
+  void setUpdateAvailableCb(UpdateAvailable_cb fn) { onUpdateAvailable = fn; } // callback setter
+
   // stream getter
   typedef std::function<int64_t(esp32FOTA*,int)> getStream_cb; // esp32FOTA* this, int partition (U_FLASH or U_SPIFFS), returns stream size
   void setStreamGetter( getStream_cb fn ) { getStream = fn; } // callback setter
@@ -374,6 +378,7 @@ private:
   UpdateEnd_cb        onUpdateEnd; // after Update.end() and before validate_sig()
   UpdateCheckFail_cb  onUpdateCheckFail; // validate_sig() error handling, mixed situations
   UpdateFinished_cb   onUpdateFinished; // update successful
+  UpdateAvailable_cb  onUpdateAvailable; // update available
   getStream_cb        getStream; // optional stream getter, defaults to http.getStreamPtr()
   endStream_cb        endStream; // optional stream closer, defaults to http.end()
   isConnected_cb      isConnected; // optional connection checker, defaults to WiFi.status()==WL_CONNECTED
