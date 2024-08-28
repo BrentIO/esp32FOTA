@@ -301,7 +301,7 @@ public:
   void setUpdateFinishedCb(UpdateFinished_cb fn) { onUpdateFinished = fn; } // callback setter
 
   // update available
-  typedef std::function<void(const JsonVariant&)> UpdateAvailable_cb; // JsonVariant JSON document with the targeted update
+  typedef std::function<void(JsonVariant&)> UpdateAvailable_cb; // JsonVariant JSON document with the targeted update
   void setUpdateAvailableCb(UpdateAvailable_cb fn) { onUpdateAvailable = fn; } // callback setter
 
   // stream getter
