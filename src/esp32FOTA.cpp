@@ -873,6 +873,7 @@ bool esp32FOTA::execHTTPcheck()
 
     if( useURL.isEmpty() ) {
       log_e("No manifest_url provided in config, aborting!");
+      if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::BAD_CONFIGURATION );
       return false;
     }
 
@@ -896,6 +897,7 @@ bool esp32FOTA::execHTTPcheck()
 
     if ( isConnected && !isConnected() ) { // Check the current connection status
         log_i("Connection check requested but network not ready - skipping");
+        if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::CONNECTION_NOT_AVAILABLE );
         return false;  // WiFi not connected
     }
 
@@ -903,6 +905,7 @@ bool esp32FOTA::execHTTPcheck()
 
     if(! setupHTTP( useURL.c_str() ) ) {
       log_e("Unable to setup http, aborting!");
+      if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::HTTP_ERROR );
       return false;
     }
 
@@ -918,6 +921,7 @@ bool esp32FOTA::execHTTPcheck()
             log_d("Unknown HTTP response");
         }
         _http.end();
+        if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::HTTP_ERROR );
         return false;
     }
 
@@ -930,6 +934,7 @@ bool esp32FOTA::execHTTPcheck()
 
     if (err) {  // Check for errors in parsing, or JSON length may exceed buffer size
         log_e("JSON Parsing failed (%s, in=%d bytes, buff=%d bytes):", err.c_str(), _http.getSize(), JSON_FW_BUFF_SIZE );
+        if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::PARSING_FAILED );
         return false;
     }
 
@@ -941,15 +946,18 @@ bool esp32FOTA::execHTTPcheck()
         for (JsonVariant JSONDocument : arr) {
             if(checkJSONManifest(JSONDocument)) {
                 // TODO: filter "highest vs next" version number for JSON with only one firmware type but several version numbers
+                if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS );
                 if( onUpdateAvailable ) onUpdateAvailable( JSONDocument );
                 return true;
             }
         }
     } else if (JSONResult.is<JsonObject>()) {
         if(checkJSONManifest(JSONResult.as<JsonVariant>()))
+            if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS );
             return true;
     }
 
+    if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS_NO_UPDATE_AVAILABLE );
     return false; // We didn't get a hit against the above, return false
 }
 
