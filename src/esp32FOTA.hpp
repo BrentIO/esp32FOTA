@@ -244,6 +244,16 @@ public:
   template <typename T> void setPubKey( T* asset ) { _cfg.pub_key = (CryptoAsset*)asset; _cfg.check_sig = true; }
   template <typename T> void setRootCA( T* asset ) { _cfg.root_ca = (CryptoAsset*)asset; _cfg.root_ca->size();_cfg.unsafe = false; }
 
+  enum lastHTTPCheckStatus{
+    SUCCESS,
+    SUCCESS_NO_UPDATE_AVAILABLE,
+    HTTP_ERROR,
+    BAD_CONFIGURATION,
+    CONNECTION_NOT_AVAILABLE,
+    PARSING_FAILED,
+    NEVER_ATTEMPTED
+  };
+
   bool forceUpdate(const char* firmwareHost, uint16_t firmwarePort, const char* firmwarePath, bool validate );
   bool forceUpdate(const char* firmwareURL, bool validate );
   bool forceUpdate(bool validate );
@@ -303,6 +313,10 @@ public:
   // update available
   typedef std::function<void(JsonVariant&)> UpdateAvailable_cb; // JsonVariant JSON document with the targeted update
   void setUpdateAvailableCb(UpdateAvailable_cb fn) { onUpdateAvailable = fn; } // callback setter
+
+  // update service availablity
+  typedef std::function<void(lastHTTPCheckStatus)> UpdateServiceAvailablity_cb; // Status of the last attempt to call the update web server
+  void setUpdateServiceAvailabilityCb(UpdateServiceAvailablity_cb fn) { onUpdateServiceAvailablity = fn; } // callback setter
 
   // stream getter
   typedef std::function<int64_t(esp32FOTA*,int)> getStream_cb; // esp32FOTA* this, int partition (U_FLASH or U_SPIFFS), returns stream size
@@ -379,6 +393,7 @@ private:
   UpdateCheckFail_cb  onUpdateCheckFail; // validate_sig() error handling, mixed situations
   UpdateFinished_cb   onUpdateFinished; // update successful
   UpdateAvailable_cb  onUpdateAvailable; // update available
+  UpdateServiceAvailablity_cb  onUpdateServiceAvailablity; // update service is available
   getStream_cb        getStream; // optional stream getter, defaults to http.getStreamPtr()
   endStream_cb        endStream; // optional stream closer, defaults to http.end()
   isConnected_cb      isConnected; // optional connection checker, defaults to WiFi.status()==WL_CONNECTED
