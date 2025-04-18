@@ -281,7 +281,7 @@ public:
   void setExtraHTTPHeader( String name, String value ) { extraHTTPHeaders[name] = value; }
 
   // use this to set the SPIFFs partition name, only required if there is more than one SPIFFs partition
-  void setSPIFFsPartitionLabel( char* name ){ _cfg.spiffs_partition_label = name; }
+  void setSPIFFsPartitionLabel( const char* name ){  setString( &_cfg.spiffs_partition_label, name ); }
 
   // set the signature len
   void setSignatureLen( size_t len );
