@@ -542,7 +542,7 @@ bool esp32FOTA::execOTA()
 // OTA Logic
 bool esp32FOTA::execSPIFFSOTA()
 {
-	bool ret;
+	bool ret = false;
     setupStream();
 
     if( !_flashFileSystemUrl.isEmpty() ) { // a data partition was specified in the json manifest, handle the spiffs partition first
@@ -952,9 +952,10 @@ bool esp32FOTA::execHTTPcheck()
             }
         }
     } else if (JSONResult.is<JsonObject>()) {
-        if(checkJSONManifest(JSONResult.as<JsonVariant>()))
+        if(checkJSONManifest(JSONResult.as<JsonVariant>())){
             if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS );
             return true;
+        }
     }
 
     if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS_NO_UPDATE_AVAILABLE );
