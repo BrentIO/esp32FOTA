@@ -1085,11 +1085,11 @@ static int64_t getFileStream( esp32FOTA* fota, int partition)
     }
 
     int64_t updateSize = file->size();
+    file->close();
 
     // check updateSize and content type
     if( !updateSize ) {
         log_e("Empty file");
-        file->close();
         fota->setFotaStream( nullptr );
         return -1;
     }
