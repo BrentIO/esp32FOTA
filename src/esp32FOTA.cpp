@@ -86,6 +86,7 @@ bool CryptoFileAsset::fs_read_file()
     }
     contents = ""; // make sure the output bucket is empty
     len = file.size()+1;
+    contents.reserve(file.size());
     while( file.available() ) {
         contents.push_back( file.read() );
     }
@@ -114,7 +115,34 @@ size_t CryptoFileAsset::size()
 
 
 esp32FOTA::esp32FOTA(){}
-esp32FOTA::~esp32FOTA(){}
+esp32FOTA::~esp32FOTA(){
+    // Free dynamically allocated strings
+    if (_cfg.name) {
+        free(_cfg.name);
+        _cfg.name = nullptr;
+    }
+
+    if (_cfg.manifest_url) {
+        free(_cfg.manifest_url);
+        _cfg.manifest_url = nullptr;
+    }
+
+    if (_cfg.spiffs_partition_label) {
+        free(_cfg.spiffs_partition_label);
+        _cfg.spiffs_partition_label = nullptr;
+    }
+
+    // Free CryptoAsset pointers if they were allocated with new
+    if (_cfg.pub_key) {
+        delete _cfg.pub_key;
+        _cfg.pub_key = nullptr;
+    }
+
+    if (_cfg.root_ca) {
+        delete _cfg.root_ca;
+        _cfg.root_ca = nullptr;
+    }
+}
 
 
 esp32FOTA::esp32FOTA( FOTAConfig_t cfg )
@@ -129,7 +157,14 @@ void esp32FOTA::setString( char **dest, const char* src )
       log_e("Can't set string to empty source");
       return;
     }
-    if( *dest != nullptr ) free( *dest );
+
+    if (*dest == src) return; // prevent freeing our own pointer
+
+    if (*dest != nullptr) {
+        free(*dest);
+        *dest = nullptr;
+    }
+
     *dest = (char*)malloc( strlen(src)+1 );
     if( *dest == NULL ) {
       log_e("Unable to allocate %d bytes", strlen(src)+1);
@@ -829,10 +864,17 @@ bool esp32FOTA::execHTTPcheck()
     // }
 
     if (_cfg.use_device_id) {
-        // URL may already have GET values
-        String argseparator = (useURL.indexOf('?') != -1 ) ? "&" : "?";
-        useURL += argseparator + "id=" + getDeviceID();
-    }
+        char deviceid[21];
+        sprintf(deviceid, "%" PRIu64, (uint64_t)ESP.getEfuseMac()); // Format the device ID into the buffer
+
+        const char* argseparator = (strchr(useURL.c_str(), '?') != nullptr) ? "&" : "?";
+
+        // Append the device ID to the URL
+        char newURL[useURL.length() + strlen(argseparator) + strlen(deviceid) + 5];
+        sprintf(newURL, "%s%sid=%s", useURL.c_str(), argseparator, deviceid);
+
+        useURL = newURL;  // Assign the new URL back to useURL
+    }  
 
     if ( isConnected && !isConnected() ) { // Check the current connection status
         log_i("Connection check requested but network not ready - skipping");
@@ -845,6 +887,7 @@ bool esp32FOTA::execHTTPcheck()
     if(! setupHTTP( useURL.c_str() ) ) {
       log_e("Unable to setup http, aborting!");
       if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::HTTP_ERROR );
+      _http.end();
       return false;
     }
 
@@ -874,6 +917,7 @@ bool esp32FOTA::execHTTPcheck()
     if (err) {  // Check for errors in parsing, or JSON length may exceed buffer size
         log_e("JSON Parsing failed (%s, in=%d bytes, buff=%d bytes):", err.c_str(), _http.getSize(), JSON_FW_BUFF_SIZE );
         if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::PARSING_FAILED );
+        _http.end();
         return false;
     }
 
@@ -900,18 +944,6 @@ bool esp32FOTA::execHTTPcheck()
     if( onUpdateServiceAvailablity ) onUpdateServiceAvailablity( lastHTTPCheckStatus::SUCCESS_NO_UPDATE_AVAILABLE );
     return false; // We didn't get a hit against the above, return false
 }
-
-
-String esp32FOTA::getDeviceID()
-{
-    char deviceid[21];
-    uint64_t chipid;
-    chipid = ESP.getEfuseMac();
-    sprintf(deviceid, "%" PRIu64, chipid);
-    String thisID(deviceid);
-    return thisID;
-}
-
 
 // Force a firmware update regardless on current version
 bool esp32FOTA::forceUpdate(const char* firmwareURL, bool validate )
