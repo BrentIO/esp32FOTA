@@ -134,12 +134,10 @@ esp32FOTA::~esp32FOTA(){
 
     // Free CryptoAsset pointers if they were allocated with new
     if (_cfg.pub_key) {
-        delete _cfg.pub_key;
         _cfg.pub_key = nullptr;
     }
 
     if (_cfg.root_ca) {
-        delete _cfg.root_ca;
         _cfg.root_ca = nullptr;
     }
 }
