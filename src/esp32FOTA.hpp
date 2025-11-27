@@ -222,6 +222,7 @@ struct FOTAConfig_t
   size_t       signature_len {FW_SIGNATURE_LENGTH};
   bool         allow_reuse { true };
   bool         use_http10 { false }; // Use HTTP 1.0 (WARNING: setting to 'true' disables chunked transfers)
+  bool         use_bundled_certs { false };   // use built-in ESP-IDF CA bundle
   FOTAConfig_t() = default;
 };
 
@@ -287,6 +288,10 @@ public:
   void setCertFileSystem( fs::FS *cert_filesystem = nullptr );
 
   // this is passed to Update.onProgress()
+
+  // enable bundled CA certificates
+  void useBundledCerts(bool enable = true);
+
   typedef std::function<void(size_t,size_t)> ProgressCallback_cb; // size_t progress, size_t size
   void setProgressCb(ProgressCallback_cb fn) { onOTAProgress = fn; } // callback setter
 

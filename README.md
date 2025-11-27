@@ -328,6 +328,26 @@ $ gzip -c esp32-fota-http-2.bin > esp32-fota-http-2.bin.gz
 
 ### Root Certificates
 
+#### Certificate Bundles
+
+Arduino 3.x now supports bundled root certificates, which means 99% of sites (including github.com) will work over https and you don't need to maintain a custom certificate on your firmware.
+
+To enable this functionality, simply call this during your setup:
+
+```C++
+esp32FOTA.useBundledCerts();
+``` 
+
+If you are using Platformio / PIOArduino, the certificates are not automatically bundled and you will need to download them from [CURL](https://curl.se/docs/caextract.html).
+
+Save that file to your project root directory and then add this line to your platformio.ini:
+
+```board_build.embed_txtfiles=ca_cert_bundle```
+
+Make sure it is named exactly ca_cert_bundle with no extension and located in the top level of your project.
+
+#### Custom Certificates
+
 Certificates and signatures can be stored in different places: any fs::FS filesystem or progmem as const char*.
 
 Filesystems:
