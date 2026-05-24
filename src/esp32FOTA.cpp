@@ -21,6 +21,12 @@
      - Refactored some code blocks
      - Added spiffs/littlefs/fatfs updatability
      - Made crypto assets (pub key, rootca) loadable from multiple sources
+
+   Date: 2026-05-24
+   Author: BrentIO <https://github.com/BrentIO>
+   Changes:
+     - Added support for 'ui' manifest key for filesystem partition URL (FireFly ecosystem standardization)
+     - 'littlefs' key retained for backward compatibility; 'ui' takes precedence when both are present
    Roadmap:
      - Firmware/FlashFS update order (SPIFFS/LittleFS first or last?)
      - Archive support for gz/targz formats
@@ -602,7 +608,7 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
         return false;
     }
     if( partition == U_SPIFFS && _flashFileSystemUrl.isEmpty() ) {
-        log_i("[SKIP] No spiffs/littlefs/fatfs partition was specified");
+        log_i("[SKIP] No ui/spiffs/littlefs/fatfs partition was specified");
         return true; // data partition is optional, so not an error
     }
     if ( partition == U_FLASH && _firmwareUrl.isEmpty() ) {
@@ -849,18 +855,21 @@ bool esp32FOTA::checkJSONManifest(JsonVariant doc)
     bool has_tls        = has_port ? (portnum  == 443 || portnum  == 4433) : false;
     bool has_spiffs     = doc["spiffs"].is<const char*>();
     bool has_littlefs   = doc["littlefs"].is<const char*>();
+    bool has_ui         = doc["ui"].is<const char*>();
     bool has_fatfs      = doc["fatfs"].is<const char*>();
-    bool has_filesystem = has_littlefs || has_spiffs || has_fatfs;
+    bool has_filesystem = has_ui || has_littlefs || has_spiffs || has_fatfs;
 
     String protocol(has_tls ? "https" : "http");
     String flashFSPath  =
       has_filesystem
       ? (
-        has_littlefs
-        ? doc["littlefs"].as<const char*>()
-        : has_spiffs
-          ? doc["spiffs"].as<const char*>()
-          : doc["fatfs"].as<const char*>()
+        has_ui
+        ? doc["ui"].as<const char*>()
+        : has_littlefs
+          ? doc["littlefs"].as<const char*>()
+          : has_spiffs
+            ? doc["spiffs"].as<const char*>()
+            : doc["fatfs"].as<const char*>()
         )
       : "";
 
@@ -879,7 +888,7 @@ bool esp32FOTA::checkJSONManifest(JsonVariant doc)
         }
     } else if( has_firmware && has_hostname && has_port ) { // Precise scenario: Hostname, Port and Firmware Path were provided
         _firmwareUrl = protocol + "://" + doc["host"].as<const char*>() + ":" + portnum + doc["bin"].as<const char*>();
-        if( has_filesystem ) { // More complex scenario: the manifest also provides a [spiffs, littlefs or fatfs] partition
+        if( has_filesystem ) { // More complex scenario: the manifest also provides a [ui, spiffs, littlefs or fatfs] partition
             _flashFileSystemUrl = protocol + "://" + doc["host"].as<const char*>() + ":" + portnum + flashFSPath;
         }
     } else { // JSON was malformed - no firmware target was provided
