@@ -27,6 +27,14 @@
    Changes:
      - Added support for 'ui' manifest key for filesystem partition URL (FireFly ecosystem standardization)
      - 'littlefs' key retained for backward compatibility; 'ui' takes precedence when both are present
+
+   Date: 2026-05-26
+   Author: BrentIO <https://github.com/BrentIO>
+   Changes:
+     - Generic labeled-partition OTA: bypass Update.begin() (which ignores label parameter in Arduino ESP32
+       core) and write directly via esp_partition_find_first() + esp_partition_erase_range() + esp_partition_write()
+     - Library-level type protection: only SPIFFS/LittleFS (0x82) and FAT (0x01) data partitions eligible
+     - Application-level block list: setBlockedPartitions() allows caller to prohibit specific partition labels
    Roadmap:
      - Firmware/FlashFS update order (SPIFFS/LittleFS first or last?)
      - Archive support for gz/targz formats
@@ -666,22 +674,14 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
     // If using compression, the size is implicitely unknown
     size_t fwsize = mode_z ? UPDATE_SIZE_UNKNOWN : updateSize;       // fw_size is unknown if we have a compressed image
 
-    bool canBegin = false;
-
-    //If type is spiffs and a specific partition label is specified
-    if(partition == U_SPIFFS && _cfg.spiffs_partition_label){
-        canBegin = Update.begin(fwsize, partition, -1, LOW, _cfg.spiffs_partition_label);
-
-        if(!canBegin){
-            log_e("Update cannot begin; Partition type (%i), label (%s), or size (%i) mismatch", partition, _cfg.spiffs_partition_label, fwsize);
-            F_abort();
-            if( onUpdateBeginFail ) onUpdateBeginFail( partition );
-            return false;
-        }
-
-    }else{
-        canBegin = F_canBegin();
+    // Labeled SPIFFS/LittleFS partitions: bypass Update library (it ignores the label parameter)
+    // and write directly via ESP-IDF partition APIs to guarantee the correct partition is targeted.
+    if (partition == U_SPIFFS && _cfg.spiffs_partition_label) {
+        return _execLabeledPartition(fwsize, restart_after);
     }
+
+    bool canBegin = false;
+    canBegin = F_canBegin();
 
     if( !canBegin ) {
         log_e("Not enough space to begin OTA, partition size mismatch?");
@@ -799,6 +799,113 @@ bool esp32FOTA::execOTA( int partition, bool restart_after )
         log_e("Update not finished! Something went wrong!");
     }
     return false;
+}
+
+
+bool esp32FOTA::_execLabeledPartition( size_t fwsize, bool restart_after )
+{
+    const char* label = _cfg.spiffs_partition_label;
+
+    // Library-level protection: only filesystem-type data partitions may be written
+    const esp_partition_t* target = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, label);
+    if (!target) {
+        // Also try FAT subtype
+        target = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, label);
+    }
+    if (!target) {
+        log_e("Partition with label '%s' not found", label);
+        if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+        return false;
+    }
+    if (target->type != ESP_PARTITION_TYPE_DATA ||
+        (target->subtype != ESP_PARTITION_SUBTYPE_DATA_SPIFFS &&
+         target->subtype != ESP_PARTITION_SUBTYPE_DATA_FAT)) {
+        log_e("Partition '%s' subtype (0x%02x) is not a writable filesystem type", label, target->subtype);
+        if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+        return false;
+    }
+
+    // Application-level block list
+    for (const auto& blocked : _blockedPartitions) {
+        if (blocked == label) {
+            log_e("Partition '%s' is blocked at application level", label);
+            if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+            return false;
+        }
+    }
+
+    // Size check
+    if (fwsize != UPDATE_SIZE_UNKNOWN && fwsize > target->size) {
+        log_e("Image size %u exceeds partition '%s' size %lu", fwsize, label, target->size);
+        if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+        return false;
+    }
+
+    // Erase
+    log_i("Erasing partition '%s' (%lu bytes)", label, target->size);
+    esp_err_t err = esp_partition_erase_range(target, 0, target->size);
+    if (err != ESP_OK) {
+        log_e("Failed to erase partition '%s': %d", label, err);
+        if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+        return false;
+    }
+
+    log_i("Writing partition '%s' (%u bytes)", label, fwsize);
+    if (onOTAProgress) onOTAProgress(0, fwsize);
+
+    // Chunked write from stream
+    const size_t CHUNK = 4096;
+    uint8_t* buf = (uint8_t*)malloc(CHUNK);
+    if (!buf) {
+        log_e("Buffer alloc failed");
+        if (onUpdateBeginFail) onUpdateBeginFail(U_SPIFFS);
+        return false;
+    }
+
+    size_t totalWritten = 0;
+    bool ok = true;
+    while (totalWritten < fwsize && ok) {
+        size_t toRead = min(fwsize - totalWritten, CHUNK);
+        size_t got = 0;
+        uint32_t timeout = millis() + _stream_timeout;
+        while (got < toRead) {
+            if (millis() > timeout) { ok = false; break; }
+            int avail = _stream->available();
+            if (avail > 0) {
+                size_t r = _stream->readBytes((char*)(buf + got), min((size_t)avail, toRead - got));
+                got += r;
+                timeout = millis() + _stream_timeout;
+            } else {
+                vTaskDelay(1);
+            }
+        }
+        if (!ok || got == 0) break;
+
+        // Pad final chunk to 4-byte alignment required by flash write
+        size_t toWrite = (got + 3) & ~3u;
+        if (toWrite > got) memset(buf + got, 0xFF, toWrite - got);
+
+        if (esp_partition_write(target, totalWritten, buf, toWrite) != ESP_OK) {
+            ok = false; break;
+        }
+        totalWritten += got;
+        if (onOTAProgress) onOTAProgress(totalWritten, fwsize);
+    }
+    free(buf);
+
+    if (!ok || totalWritten != fwsize) {
+        log_e("Written only: %u/%u — premature end of stream?", totalWritten, fwsize);
+        return false;
+    }
+
+    log_d("Written: %u bytes to partition '%s' successfully", totalWritten, label);
+    _target_partition = target;
+    if (onUpdateEnd) onUpdateEnd(U_SPIFFS);
+    if (onUpdateFinished) onUpdateFinished(U_SPIFFS, restart_after);
+
+    return true;
 }
 
 
