@@ -54,7 +54,10 @@ extern "C" {
 // bundle bytes (which are only available as ELF symbols in IDF cmake builds).
 class esp32FOTA_SecureClient : public ClientSecure {
 public:
-  void useFrameworkCertBundle() { _use_ca_bundle = true; }
+  void useFrameworkCertBundle() {
+    attach_ssl_certificate_bundle(sslclient.get(), true);
+    _use_ca_bundle = true;
+  }
 };
 
 #include <HTTPClient.h>
