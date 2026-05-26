@@ -2,8 +2,9 @@ name: Arduino Build
 
 # The workflow will run on every push and pull request to the repository
 on:
-  - push
-  - pull_request
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   compile-sketch:
