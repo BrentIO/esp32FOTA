@@ -433,19 +433,30 @@ bool esp32FOTA::setupHTTP( const char* url )
            ================================ */
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
         if (!https_initialized && _cfg.use_bundled_certs) {
+#ifdef ARDUINO
+            // Arduino/platformio builds: the ELF symbols _binary_ca_cert_bundle_start/_end
+            // are not generated, so we cannot pass raw bytes to setCACertBundle(). Instead,
+            // set _use_ca_bundle=true directly (via the subclass accessor) so that
+            // ssl_client.cpp calls esp_crt_bundle_attach at connect time, which uses the
+            // Arduino framework's pre-compiled built-in CA bundle.
+            _client.useFrameworkCertBundle();
+            log_i("Using Arduino framework built-in certificate bundle");
+            _http.begin(_client, url);
+            https_initialized = true;
+#else
             __attribute__((weak)) extern const uint8_t ca_cert_bundle_start[] asm("_binary_ca_cert_bundle_start");
             __attribute__((weak)) extern const uint8_t ca_cert_bundle_end[]   asm("_binary_ca_cert_bundle_end");
 
             if (ca_cert_bundle_start != nullptr && ca_cert_bundle_end != nullptr) {
                 size_t bundle_size = ca_cert_bundle_end - ca_cert_bundle_start;
                 log_i("Using built-in ESP-IDF certificate bundle (%u bytes)", bundle_size);
-
                 _client.setCACertBundle(ca_cert_bundle_start, bundle_size);
                 _http.begin(_client, url);
                 https_initialized = true;
             } else {
                 log_w("Bundled certs requested, but CA bundle not linked. Falling back.");
             }
+#endif
         }
 #endif
 

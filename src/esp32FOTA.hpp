@@ -49,6 +49,14 @@ extern "C" {
   #define ClientSecure WiFiClientSecure
 #endif
 
+// Subclass that exposes _use_ca_bundle (protected) so we can tell the client
+// to use the Arduino framework's built-in cert bundle without needing the raw
+// bundle bytes (which are only available as ELF symbols in IDF cmake builds).
+class esp32FOTA_SecureClient : public ClientSecure {
+public:
+  void useFrameworkCertBundle() { _use_ca_bundle = true; }
+};
+
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <FS.h>
@@ -378,7 +386,7 @@ public:
 private:
 
   HTTPClient _http;
-  ClientSecure _client;
+  esp32FOTA_SecureClient _client;
   Stream *_stream;
   fs::File _file;
 
