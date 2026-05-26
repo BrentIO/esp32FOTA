@@ -558,6 +558,52 @@ On the next update-check the ESP32 will download the `firmware.img` extract the 
 [#92]: https://github.com/chrisjoyce911/esp32FOTA/pull/92
 
 
+---
+
+## BrentIO fork changes
+
+This is a fork of [chrisjoyce911/esp32FOTA](https://github.com/chrisjoyce911/esp32FOTA) maintained by [@BrentIO](https://github.com/BrentIO). The changes below are specific to this fork and are not present in the upstream library.
+
+### Manifest field rename: `url` → `app`
+
+The OTA manifest field for the main application binary was renamed from `url` to `app` for symmetry with the `ui` field. Update your server-side manifest JSON accordingly:
+
+```json
+{
+  "type": "FireFly Controller",
+  "version": "2026.03.001",
+  "app": "https://firmware.example.com/Controller.ino.bin",
+  "ui":  "https://firmware.example.com/ui.bin"
+}
+```
+
+### Labeled partition OTA (`setSPIFFsPartitionLabel`)
+
+The upstream `Update.begin()` ignores its `label` parameter in Arduino ESP32 core ≥ 3.3.8 (`(void)label` on line 180 of `Updater.cpp`), always selecting the first SPIFFS partition by flash address. This fork bypasses the Arduino `Update` library for data-partition writes entirely, using `esp_partition_find_first()` + `esp_partition_erase_range()` + `esp_partition_write()` directly.
+
+```cpp
+fota.setSPIFFsPartitionLabel("ui");  // writes to the partition named "ui", not just the first SPIFFS partition
+```
+
+The manifest key must match the partition label:
+
+```json
+{ "app": "https://.../firmware.bin", "ui": "https://.../ui.bin" }
+```
+
+### Application-level partition block list (`setBlockedPartitions`)
+
+Prevents specific partitions from being overwritten via OTA, even if the manifest requests them. Call before `execOTA()` or `forceUpdate()`.
+
+```cpp
+fota.setBlockedPartitions({"config"});
+```
+
+**Two-tier protection model:**
+
+1. **Library level** — only `ESP_PARTITION_SUBTYPE_DATA_SPIFFS` and `ESP_PARTITION_SUBTYPE_DATA_FAT` subtypes can be written. App, NVS, coredump, and other partition types are unreachable regardless of what the manifest contains.
+2. **Application level** — partitions named in `setBlockedPartitions()` are rejected by name. To write a blocked partition, ship a firmware update that removes it from the list first, then ship the partition image — a deliberate two-step failsafe.
+
 ### Libraries
 
 This library relies on [semver.c by h2non](https://github.com/h2non/semver.c) for semantic versioning support. semver.c is licensed under [MIT](https://github.com/h2non/semver.c/blob/master/LICENSE).

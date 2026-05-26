@@ -964,7 +964,7 @@ bool esp32FOTA::checkJSONManifest(JsonVariant doc)
     debugSemVer("Payload firmware version", _payload_sem.ver() );
 
     // Memoize some values to help with the decision tree
-    bool has_url        = doc["url"].is<const char*>();
+    bool has_url        = doc["app"].is<const char*>();
     bool has_firmware   = doc["bin"].is<const char*>();
     bool has_hostname   = doc["host"].is<const char*>();
     //bool has_signature  = doc["sig"].is<const char*>();
@@ -1000,7 +1000,7 @@ bool esp32FOTA::checkJSONManifest(JsonVariant doc)
     );
 
     if( has_url ) { // Basic scenario: a complete URL was provided in the JSON manifest, all other keys will be ignored
-        _firmwareUrl = doc["url"].as<const char*>();
+        _firmwareUrl = doc["app"].as<const char*>();
         if( has_hostname ) { // If the manifest provides both, warn the user
             log_w("Manifest provides both url and host - Using URL");
         }
