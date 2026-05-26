@@ -38,7 +38,9 @@ extern "C" {
 }
 
 #include <map>
+#include <vector>
 #include <WiFi.h>
+#include <esp_partition.h>
 
 // arduino-esp32 core 2.x => 3.x migration
 #if __has_include(<NetworkClientSecure.h>)
@@ -305,6 +307,12 @@ public:
   // use this to set the SPIFFs partition name, only required if there is more than one SPIFFs partition
   void setSPIFFsPartitionLabel( const char* name ){  setString( &_cfg.spiffs_partition_label, name ); }
 
+  // set partition labels the application prohibits from receiving OTA writes (application-level block)
+  void setBlockedPartitions( std::initializer_list<const char*> labels ) {
+    _blockedPartitions.clear();
+    for (const char* l : labels) _blockedPartitions.emplace_back(l);
+  }
+
   // set the signature len
   void setSignatureLen( size_t len );
 
@@ -436,6 +444,12 @@ private:
 
   // temporary partition holder for signature check operations
   const esp_partition_t* _target_partition = nullptr;
+
+  // application-level partition block list
+  std::vector<String> _blockedPartitions;
+
+  // direct ESP-IDF write path for labeled SPIFFS/LittleFS partitions
+  bool _execLabeledPartition( size_t fwsize, bool restart_after );
 
   // This is kept for legacy behaviour, use setPubKey() and setRootCA() with
   // CryptoMemAsset ot CryptoFileAsset instead

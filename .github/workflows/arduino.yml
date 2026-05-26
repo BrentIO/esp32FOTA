@@ -2,8 +2,9 @@ name: Arduino Build
 
 # The workflow will run on every push and pull request to the repository
 on:
-  - push
-  - pull_request
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   compile-sketch:
@@ -12,7 +13,7 @@ jobs:
     steps:
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Compile examples
         uses: arduino/compile-sketches@v1
@@ -30,6 +31,7 @@ jobs:
               source-url: https://github.com/vortigont/esp32-flashz.git
 
           sketch-paths: |
+            - examples/labeledPartition/labeledPartition.ino
             - examples/withDeviceID/withDeviceID.ino
             - examples/forceUpdate/forceUpdate.ino
             - examples/HTTP/HTTP_signature_check/HTTP_signature_check.ino
